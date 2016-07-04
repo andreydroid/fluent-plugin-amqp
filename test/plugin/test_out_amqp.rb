@@ -38,6 +38,14 @@ class AMPQOutputTest < Test::Unit::TestCase
     tls_verify_peer true
   ]
 
+	QUEUE_CONFIG = CONFIG + %[
+		auto_create_queue true
+		key my_exchange
+		queue_name my_queue
+		queue_durable false
+		queue_message_ttl 60000
+	]
+
   def create_driver(conf)
     Fluent::Test::OutputTestDriver.new(Fluent::AMQPOutput).configure(conf)
   end
@@ -111,7 +119,7 @@ class AMPQOutputTest < Test::Unit::TestCase
       plugin.start
       10.times { sleep 0.05 }
 
-      # Should have created the 'logs' queue
+      # Should have created the 'logs' exchange
       assert_equal true, plugin.connection.exchange_exists?('my_exchange')
       pend("Unable to check binding state - cant reach channel instance") {
         chnl = plugin.somehow_get_channel
@@ -120,4 +128,26 @@ class AMPQOutputTest < Test::Unit::TestCase
     end
 
   end
+
+	sub_test_case 'queue binding' do
+
+		test 'Queue is created' do
+			omit("BunnyMock is not avaliable") unless Object.const_defined?("BunnyMock")
+
+			plugin = create_driver(QUEUE_CONFIG).instance
+			plugin.connection = BunnyMock.new
+
+      # Start the driver and wait while it initialises the threads etc
+      plugin.start
+      10.times { sleep 0.05 }
+
+      # Should have created the 'logs' exchange
+      assert_equal true, plugin.connection.queue_exists?('my_queue')
+      pend("Unable to check queue state - cant reach channel instance") {
+        chnl = plugin.somehow_get_channel
+        asset_equal true, chnl.bound_to?('my_exchange')
+      }
+
+		end
+	end
 end

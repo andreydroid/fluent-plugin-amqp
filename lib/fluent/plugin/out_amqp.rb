@@ -32,6 +32,18 @@ module Fluent
     config_param :tls_key, :string, :default => nil
     config_param :tls_ca_certificates, :array, :default => nil
     config_param :tls_verify_peer, :bool, :default => true
+    config_param :auto_create_queue, :bool, :default => false
+    config_param :auto_bind_queue, :bool, :default => true
+    config_param :queue_auto_delete, :bool, :default => false
+    config_param :queue_name, :string, :default => "#{@exchange}"
+    config_param :queue_durable, :bool, :default => false
+    config_param :queue_message_ttl, :integer, :default => nil
+    config_param :queue_auto_expire, :integer, :default => nil
+    config_param :queue_max_length, :integer, :default => nil
+    config_param :queue_max_length_bytes, :integer, :default => nil
+    config_param :queue_dead_letter_exchange, :string, :default => nil
+    config_param :queue_dead_letter_routing_key, :string, :default => nil
+    config_param :queue_max_priority, :integer, :default => nil
 
     def initialize
       super
@@ -50,6 +62,25 @@ module Fluent
       check_tls_configuration
     end
 
+		def create_queue
+			check_queue_configuration
+			log.info "Creating new queue #{@queue_name}"
+
+			if @connection.queue_exists?(@queue_name)
+				log.info "Queue exists #{@queue_name}"
+			end
+			@queue = @channel.queue(@queue_name, :durable => @queue_durable,
+																:'auto-delete' => @queue_auto_delete,
+																:arguments => get_queue_arguments)
+		end
+
+		def bind_queue
+			if @queue
+				log.info "Binding queue #{@queue_name} to exchange #{@exchange} using routing_key #{@key}"
+				@queue.bind(@exch, :routing_key => @key)
+			end
+		end
+
     def start
       super
       begin
@@ -67,6 +98,8 @@ module Fluent
       @exch = @channel.exchange(@exchange, :type => @exchange_type.intern,
                               :passive => @passive, :durable => @durable,
                               :auto_delete => @auto_delete)
+			create_queue if @auto_create_queue
+			bind_queue if @auto_bind_queue 
     end
 
     def shutdown
@@ -103,6 +136,27 @@ module Fluent
 
 
     private
+
+		def get_queue_arguments()
+			args = {}
+			args["x-message-ttl"] = @queue_message_ttl if @queue_message_ttl
+			args["x-expires"] = @queue_auto_expire if @queue_auto_expire
+			args["x-max-length"] = @queue_max_length if @queue_max_length
+			args["x-max-length-bytes"] = @queue_max_length_bytes if @queue_max_length_bytes
+			args["x-dead-letter-exchange"] = @queue_dead_letter_exchange if @queue_dead_letter_exchange
+			args["x-dead-letter-routing-key"] = @queue_dead_letter_routing_key if @queue_dead_letter_routing_key
+			args["x-max-priority"] = @queue_max_priority if @queue_max_priority
+			return args
+		end
+
+		def check_queue_configuration()
+      if @auto_create_queue
+        unless @queue_name && @key
+            raise ConfigError, "queue_name and key must be specified if auto_create_queue is enabled."
+        end
+      end
+   	end
+
     def check_tls_configuration()
       if @tls
         unless @tls_key && @tls_cert
