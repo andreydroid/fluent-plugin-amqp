@@ -1,0 +1,7 @@
+source "https://rubygems.org"
+
+gem "fluentd", "~> 0.14.0"
+
+gemspec :path => "../"
+
+gem 'coveralls', require: false

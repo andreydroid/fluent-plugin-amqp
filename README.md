@@ -2,19 +2,35 @@
 
 This plugin provides both a Source and Matcher which uses RabbitMQ as its transport.
 
+[![Build Status](https://travis-ci.org/giraffi/fluent-plugin-amqp.svg?branch=master)](https://travis-ci.org/giraffi/fluent-plugin-amqp)
+[![Gem Version](https://badge.fury.io/rb/fluent-plugin-amqp.svg)](https://badge.fury.io/rb/fluent-plugin-amqp)
+[![Coverage Status](https://coveralls.io/repos/github/giraffi/fluent-plugin-amqp/badge.svg)](https://coveralls.io/github/giraffi/fluent-plugin-amqp)
+
 # Table of contents
 
+1. [Requirements](#requirements)
 1. [Features](#features)
     1. [Highly Available Failover](#feat-failover)
 1. [Configuration](#configuration)
     1. [Common parameters](#conf-common)
     1. [Source](#conf-source)
     1. [Matcher](#conf-matcher)
+         1. [Message Headers](#conf-matcher-header)
 1. [Example Use Cases](#usecases)
     1. [Using AMQP instead of Fluent TCP forwarders](#uc-forwarder)
     1. [Enable TLS Authentication](#uc-tls)
 1. [Contributing](#contributing)
 1. [Copyright](#copyright)
+
+# Requirements <a name="requirements"></a>
+
+
+|fluent-amqp-plugin|fluent|ruby|
+|----|----|----|
+|>= 0.10.0 | >= 0.14.8 | >= 2.1 |
+| < 0.10.0 | > 0.10.0, < 2 <sup>*</sup> | >= 1.9  |
+
+* May not support all future fluentd features
 
 # Features <a name="features"></a>
 
@@ -25,8 +41,8 @@ are in your cluster. This allows for highly avaliable configurations where a
 node in your cluster may become inaccessible and this plugin will attempt a reconnection
 on another host in the array.
 
->>> WARNING: Due to limitations in the library being used for connecting to RabbitMQ
-each node of the cluster much use the same port, vhost and other configuration.
+> *WARNING:* Due to limitations in the library being used for connecting to RabbitMQ
+each node of the cluster must use the same port, vhost and other configuration.
 
 ### Example
 
@@ -138,13 +154,6 @@ Note: The following are in addition to the common parameters shown above.
 
 ## Matcher - output events from RabbitMQ <a name="conf-matcher"></a>
 
-
-
-
-
-
-### out
-=======
 ### Matcher specific parameters
 
 |param|type|default|description|
@@ -153,6 +162,55 @@ Note: The following are in addition to the common parameters shown above.
 |:exchange_type|:string|"direct"| Type of exchange ( direct, fanout, topic, headers )|
 |:persistent|:bool|false| | Are messages kept on the exchange even if RabbitMQ shuts down |
 |:key|:string|nil| Routing key to attach to events (Only applies when `exchange_type topic`) See also `tag_key`|
+|:content_type|:string|"application/octet"| Content-type header to send with message |
+|:content_encoding|:string|nil| Content-Encoding header to send - eg base64 or rot13 |
+
+#### Headers <a name="conf-matcher-headers"></a>
+
+It is possible to specify message headers based on the content of the incoming
+message, or as a fixed default value as shown below;
+
+```
+<matcher ...>
+...
+
+  <header>
+    name LogLevel
+    source level
+    default "INFO"
+  </header>
+  <header>
+    name SourceHost
+    default my.example.com
+  </header>
+  <header>
+    name CorrelationID
+    source x-request-id
+  </header>
+  <header>
+    name NestedExample
+    source a.nested.value
+  </header>
+  <header>
+    name AnotherNestedExample
+    source ["a", "nested", "value"]
+  </header>
+
+...
+</matcher>
+```
+
+
+The header elements may be set multiple times for multiple additional headers
+to be included on any given message.
+
+* If source is omitted, the header will _always_ be set to the default value
+* If default is omitted the header will only be set if the source is found
+* Overloading headers is permitted
+    * Last defined header with a discovered or default value will be used
+    * Defaults and discovered values are treated equally - If you set a default
+    for a overloaded header the earlier headers *will never be used*
+
 
 ### Example
 
@@ -166,6 +224,7 @@ Note: The following are in addition to the common parameters shown above.
   vhost /
   user guest
   pass guest
+  content_type application/json
 </match>
 ```
 
@@ -181,9 +240,6 @@ which is then consumed by one or more input agents.
 
 The example configuration below shows how to setup a direct exchange, with
 multiple consumers each receiving events.
-
-> Note: A manual step is required to bind the exchange to queues reading
-> events - This will be resolved by [#16](https://github.com/giraffi/fluent-plugin-amqp/issues/16)
 
 ### Matcher - Writes to Exchange
 
