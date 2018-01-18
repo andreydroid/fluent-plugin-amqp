@@ -113,9 +113,14 @@ module Fluent
 
     def write(chunk)
       chunk.msgpack_each do |(tag, time, data)|
-        data = JSON.dump( data ) unless data.is_a?( String )
-        log.debug "Sending message #{data}, :key => #{routing_key( tag)} :headers => #{headers(tag,time)}"
-        @exch.publish(data, :key => routing_key( tag ), :persistent => @persistent, :headers => headers( tag, time ))
+        begin
+          data = JSON.dump( data ) unless data.is_a?( String )
+          log.debug "Sending message #{data}, :key => #{routing_key( tag)} :headers => #{headers(tag,time)}"
+          @exch.publish(data, :key => routing_key( tag ), :persistent => @persistent, :headers => headers( tag, time ))
+        rescue JSON::GeneratorError => e
+          log.error "Failure converting data object to json string: #{e.message}"
+          log.error "JSON.dump failure converting [#{data}]"    
+        end
       end
     end
 
