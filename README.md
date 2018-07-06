@@ -1,3 +1,7 @@
+DEPRECATED. This repo is deprecated.
+Please use https://github.com/wix-system/fluent-plugin-amqp-wix 
+
+
 # fluent-plugin-amqp
 
 This plugin provides both a Source and Matcher which uses RabbitMQ as its transport.
